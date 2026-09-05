@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"image"
 	"image/color"
 	"image/png"
@@ -22,10 +23,17 @@ type Mandelbrot struct {
 }
 
 func main() {
+	mandelbrot := Mandelbrot{}
+	flag.IntVar(&mandelbrot.width, "w", 3840, "Set de width of the image")
+	flag.IntVar(&mandelbrot.height, "h", 2160, "Set de height of the image")
+	flag.IntVar(&mandelbrot.iters, "I", 100, "Set the number of iterations for the image")
+	r := flag.Float64("r", -0.3, "Set the real part of the c we will be using")
+	i := flag.Float64("i", 3.8, "Set the imaginary part of the c we will be using")
+	viewWidth := flag.Float64("vW", 6.8, "Define how much of the y axis we will see (divide by two)")
+	flag.Parse()
 
-	mandelbrot := NewMandelbrot(
-		3840, 2160, 100, complex(-0.3, 1.9*2), 3.4*2,
-	)
+	center := complex(*r, *i)
+	mandelbrot.NewMandelbrot(center, *viewWidth)
 
 	myImage := image.NewRGBA(image.Rect(0, 0, mandelbrot.width, mandelbrot.height))
 
@@ -47,36 +55,26 @@ func main() {
 	}
 }
 
-func NewMandelbrot(width, height, iters int, center complex128, viewWidth float64) Mandelbrot {
-	ratio := float64(width) / float64(height)
+func (m *Mandelbrot) NewMandelbrot(center complex128, viewWidth float64) {
+	ratio := float64(m.width) / float64(m.height)
 
-	xmin := real(center) - viewWidth/2
-	xmax := real(center) + viewWidth/2
+	m.xmin = real(center) - viewWidth/2
+	m.xmax = real(center) + viewWidth/2
 
 	viewHeight := viewWidth / ratio
 
-	ymin := imag(center) + viewHeight/2
-	ymax := imag(center) - viewHeight/2
-
-	return Mandelbrot{
-		width:  width,
-		height: height,
-		iters:  iters,
-		xmin:   xmin,
-		xmax:   xmax,
-		ymin:   ymin,
-		ymax:   ymax,
-	}
+	m.ymin = imag(center) + viewHeight/2
+	m.ymax = imag(center) - viewHeight/2
 }
 
-func (m Mandelbrot) getImaginaryNumber(x, y int) complex128 {
+func (m *Mandelbrot) getImaginaryNumber(x, y int) complex128 {
 	re := m.xmin + float64(x)/float64(m.width-1)*(m.xmax-m.xmin)
 	im := m.ymax + float64(y)/float64(m.height-1)*(m.ymax-m.ymin)
 
 	return complex(re, im)
 }
 
-func (m Mandelbrot) pixelColor(x, y int) uint8 {
+func (m *Mandelbrot) pixelColor(x, y int) uint8 {
 	c := m.getImaginaryNumber(x, y)
 
 	z := complex128(0)
