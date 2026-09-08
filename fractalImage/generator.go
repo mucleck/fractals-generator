@@ -3,11 +3,10 @@ package fractalimage
 import (
 	"flag"
 	"image"
-	"image/color"
 	"image/png"
 	"math"
-	"math/cmplx"
 	"os"
+	"sync"
 )
 
 type Config struct {
@@ -15,22 +14,58 @@ type Config struct {
 	ViewWidth, Real, Imaginary float64
 	C                          complex128
 	FileName                   string
+	pngCompression             bool
 
 	//Coordinates to map from complex number to a pixel
 	xmin, xmax, ymin, ymax float64
+
+	dx float64
+	dy float64
 }
+
+type Region struct {
+	x, y, maxX, maxY int
+}
+
+const Threads int = 8
 
 func GenerateImage(config Config) error {
 	config.mapBounds()
 
 	myImage := image.NewRGBA(image.Rect(0, 0, config.Width, config.Height))
 
-	for i := range config.Width {
-		for j := range config.Height {
-			c := pixelColor(i, j, &config)
-			myImage.Set(i, j, color.RGBA{c, c, c, 255})
-		}
+	var wg sync.WaitGroup
+
+	jobs := make(chan Region)
+
+	for range Threads {
+		wg.Go(func() {
+			for region := range jobs {
+				for i := region.x; i < region.maxX; i++ {
+					for j := region.y; j < region.maxY; j++ {
+						c := pixelColor(i, j, &config)
+						//I do this instead of .Set because we know for sure that the image is inside
+						//borders and its already and RGBA
+						offset := j*myImage.Stride + i*4
+
+						myImage.Pix[offset] = c
+						myImage.Pix[offset+1] = c
+						myImage.Pix[offset+2] = c
+						myImage.Pix[offset+3] = 255
+					}
+				}
+			}
+		})
 	}
+
+	regions := config.generateRegions()
+
+	for _, region := range regions {
+		jobs <- region
+	}
+
+	close(jobs)
+	wg.Wait()
 
 	file, err := os.Create(config.FileName)
 	if err != nil {
@@ -38,16 +73,40 @@ func GenerateImage(config Config) error {
 	}
 
 	defer file.Close()
-	if err := png.Encode(file, myImage); err != nil {
-		return err
+	var compressionLevel png.CompressionLevel
+	if config.pngCompression {
+		compressionLevel = png.BestSpeed
+	} else {
+		compressionLevel = png.NoCompression
+	}
+	encoder := png.Encoder{
+		CompressionLevel: compressionLevel,
 	}
 
+	err = encoder.Encode(file, myImage)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
+func (c *Config) generateRegions() []Region {
+	var regions []Region
+	for i := range Threads {
+		x := i * (c.Width / Threads)
+		maxX := (i + 1) * (c.Width / Threads)
+		for j := range Threads {
+			y, maxY := j*(c.Height/Threads), (j+1)*(c.Height/Threads)
+			regions = append(regions, Region{x: x, maxX: maxX, y: y, maxY: maxY})
+		}
+	}
+
+	return regions
+}
+
 func (c *Config) getImaginaryNumber(x, y int) complex128 {
-	re := c.xmin + float64(x)/float64(c.Width-1)*(c.xmax-c.xmin)
-	im := c.ymax + float64(y)/float64(c.Height-1)*(c.ymax-c.ymin)
+	re := c.xmin + float64(x)*c.dx
+	im := c.ymax + float64(y)*c.dy
 
 	return complex(re, im)
 }
@@ -60,6 +119,7 @@ func (c *Config) LoadConfig() {
 	flag.Float64Var(&c.Imaginary, "i", 3.8, "Set the imaginary part of the c we will be using")
 	flag.Float64Var(&c.ViewWidth, "vW", 6.8, "Define how much of the y axis we will see (divide by two)")
 	flag.StringVar(&c.FileName, "n", "mandelbrot.png", "Set the name of the generated image")
+	flag.BoolVar(&c.pngCompression, "compression", false, "Choose if you want to apply png compression")
 	flag.Parse()
 
 	c.C = complex(c.Real, c.Imaginary)
@@ -71,7 +131,7 @@ func pixelColor(x, y int, config *Config) uint8 {
 	z := complex128(0)
 	var i int
 
-	for i = 0; i < config.Iterations && cmplx.Abs(z) <= 2; i++ {
+	for i = 0; i < config.Iterations && real(z)*real(z)+imag(z)*imag(z) <= 4; i++ {
 		z = z*z + c
 	}
 
@@ -89,21 +149,16 @@ func pixelColor(x, y int, config *Config) uint8 {
 	tr = real(z) * real(z)
 	ti = imag(z) * imag(z)
 
-	v := 5 +
-		float64(i) -
-		math.Log(math.Log(tr+ti))/math.Log(2)
-
+	v := 5 + float64(i) - math.Log2(math.Log(tr+ti))
 	// pickColorGrayscale()
-	v = math.Floor(512 * v / float64(config.Iterations))
+	v = 512 * v / float64(config.Iterations)
 
 	if v > 255 {
 		v = 255
 	}
-	if v < 0 {
-		v = 0
-	}
 
 	return uint8(v)
+
 }
 
 func (c *Config) mapBounds() {
@@ -116,4 +171,6 @@ func (c *Config) mapBounds() {
 
 	c.ymin = c.Imaginary + viewHeight/2
 	c.ymax = c.Imaginary - viewHeight/2
+	c.dx = (c.xmax - c.xmin) / float64(c.Width-1)
+	c.dy = (c.ymax - c.ymin) / float64(c.Height-1)
 }
