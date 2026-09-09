@@ -139,15 +139,12 @@ func pixelColor(x, y int, config *Config) uint8 {
 		return 0
 	}
 
-	tr := real(z) * real(z)
-	ti := imag(z) * imag(z)
-
 	for range 4 {
 		z = z*z + c
 
 	}
-	tr = real(z) * real(z)
-	ti = imag(z) * imag(z)
+	tr := real(z) * real(z)
+	ti := imag(z) * imag(z)
 
 	v := 5 + float64(i) - math.Log2(math.Log(tr+ti))
 	// pickColorGrayscale()
