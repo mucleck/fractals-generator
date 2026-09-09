@@ -12,6 +12,7 @@ func TestGenerateImage(t *testing.T) {
 	config := Config{}
 	config.LoadConfig()
 	config.FileName = "testing.png"
+	config.pngCompression = true
 
 	if err := GenerateImage(config); err != nil {
 		t.Errorf("err: %v", err)
