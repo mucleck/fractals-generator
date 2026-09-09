@@ -73,6 +73,13 @@ func GenerateImage(config Config) error {
 	}
 
 	defer file.Close()
+	if err := encodeImage(&config, file, myImage); err != nil {
+		return err
+	}
+	return nil
+}
+
+func encodeImage(config *Config, file *os.File, image image.Image) error {
 	var compressionLevel png.CompressionLevel
 	if config.pngCompression {
 		compressionLevel = png.BestSpeed
@@ -83,13 +90,13 @@ func GenerateImage(config Config) error {
 		CompressionLevel: compressionLevel,
 	}
 
-	err = encoder.Encode(file, myImage)
+	err := encoder.Encode(file, image)
 	if err != nil {
 		return err
 	}
 	return nil
-}
 
+}
 func (c *Config) generateRegions() []Region {
 	var regions []Region
 	for i := range Threads {
