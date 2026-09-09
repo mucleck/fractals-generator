@@ -38,6 +38,28 @@ func TestGenerateImage(t *testing.T) {
 
 }
 
+// Dummy bench test, rn 190ms per image without compression
+func BenchmarkGenerateImage(b *testing.B) {
+	config := Config{
+		Width:          3840,
+		Height:         2160,
+		Iterations:     100,
+		Real:           -0.3,
+		Imaginary:      3.8,
+		ViewWidth:      6.8,
+		FileName:       "testing.png",
+		pngCompression: false,
+	}
+
+	config.C = complex(config.Real, config.Imaginary)
+
+	for b.Loop() {
+		if err := GenerateImage(config); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
 func getHash(s string) (string, error) {
 	file, err := os.Open(s)
 	if err != nil {
