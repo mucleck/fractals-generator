@@ -5,3 +5,7 @@
 - Parametrize the function, the start position and the colors scale 
 - Support for zoom
 - Add an option to display the x and y axes in red to see where are we
+
+## Working on 
+Im gonna end this feature this week
+- [ ] Add an option to display the x and y axes in red to see where are we
